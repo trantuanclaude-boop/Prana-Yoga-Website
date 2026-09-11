@@ -1,0 +1,14 @@
+# Local screenshot workflow output
+temporary screenshots/
+
+# Dependencies
+node_modules/
+
+# OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
