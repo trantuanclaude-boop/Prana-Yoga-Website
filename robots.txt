@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Thư mục chỉ dùng lúc thiết kế, không cần nằm trong kết quả tìm kiếm
+Disallow: /brand_asset/
+
+# Khi đã có tên miền, bỏ dấu # ở dòng dưới và thay PRANA_DOMAIN
+# Sitemap: PRANA_DOMAIN/sitemap.xml
