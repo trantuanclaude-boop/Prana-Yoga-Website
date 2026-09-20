@@ -1,0 +1,69 @@
+# ============================================================================
+# Chạy một tệp SQL lên cơ sở dữ liệu Supabase.
+#
+# Vì sao có tệp này: những tệp trong thư mục supabase/ phải được chạy một lần
+# lên máy chủ thì trang quản trị mới dùng được cột mới. Bình thường việc đó
+# làm bằng tay trong SQL Editor của Supabase. Ai không quen dán SQL thì bấm
+# nút ở đây: Actions → "Chạy tệp SQL lên Supabase" → Run workflow.
+#
+# Máy chạy mượn đúng khoá SUPABASE_DB_URL mà bản sao lưu hằng đêm đang dùng,
+# nên không phải khai thêm mật khẩu ở đâu cả.
+#
+# Hai cái chốt an toàn:
+#   · Chỉ nhận tệp .sql nằm trong thư mục supabase/ — không chạy được câu
+#     lệnh gõ thẳng vào ô nhập.
+#   · Cả tệp chạy trong MỘT giao dịch: sai một câu là mọi thứ quay về như cũ,
+#     không để lại cơ sở dữ liệu dở dang.
+# ============================================================================
+name: Chạy tệp SQL lên Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: 'Tệp .sql trong thư mục supabase/ cần chạy'
+        required: true
+        default: 'supabase/2026-09-20_1_mo_ta_khoa_hoc.sql'
+
+jobs:
+  chay:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Lấy mã nguồn
+        uses: actions/checkout@v4
+
+      - name: Cài psql 17
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gnupg lsb-release
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Chạy tệp
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          FILE: ${{ github.event.inputs.file }}
+        run: |
+          case "$FILE" in
+            supabase/*.sql) ;;
+            *) echo "Chỉ chạy được tệp .sql nằm trong thư mục supabase/"; exit 1 ;;
+          esac
+          test -f "$FILE" || { echo "Không thấy tệp $FILE trong nhánh này."; exit 1; }
+          echo "Đang chạy $FILE …"
+          /usr/lib/postgresql/17/bin/psql "$DB_URL" \
+            -v ON_ERROR_STOP=1 --single-transaction -f "$FILE"
+          echo "Xong."
+
+      - name: Soát lại bảng courses
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+            select column_name, data_type, column_default
+              from information_schema.columns
+             where table_schema = 'public'
+               and table_name   = 'courses'
+             order by ordinal_position;"
