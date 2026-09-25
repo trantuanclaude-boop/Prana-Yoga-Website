@@ -28,10 +28,12 @@ declare
   v_ok    boolean;
   v_row   record;
 begin
-  select id into v_user from auth.users order by created_at limit 1;
-  if v_user is null then
-    raise exception 'Chưa có người dùng nào để thử.';
-  end if;
+  -- Người thử phải là khách thường: người dùng có sẵn duy nhất là founder, mà
+  -- quyền quản trị được ghi mọi thứ vào kho — thử bằng người đó thì mọi luật
+  -- chặn khách đều "lọt" và phép thử nói sai. Người này quay đầu cùng giao dịch.
+  insert into auth.users (id, aud, role, email)
+  values (gen_random_uuid(), 'authenticated', 'authenticated', 'thu-chuyen-khoan@vidu.test')
+  returning id into v_user;
   v_ck   := v_user::text || '/PY-THUCK01-1.jpg';
   v_card := v_user::text || '/PY-THUCK02-1.jpg';
   raise notice 'Thử trên người %', v_user;
