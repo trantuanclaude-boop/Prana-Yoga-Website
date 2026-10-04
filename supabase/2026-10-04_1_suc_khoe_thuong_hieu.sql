@@ -69,6 +69,7 @@ set search_path to ''
 as $function$
 declare
   v_staff uuid[];
+  v_mail text[];
   v_svis text[];
   v_v2 timestamptz;
   r jsonb;
@@ -80,6 +81,10 @@ begin
 
   v_staff := case when coalesce(p_with_staff, false) then '{}'::uuid[]
                   else array(select s.user_id from public.staff s) end;
+  -- Đơn và lịch đặt gửi lúc chưa đăng nhập không có user_id, chỉ có email:
+  -- loại cả những dòng mang email của người quản trị.
+  v_mail := array(select lower(u.email) from auth.users u
+                  where u.id = any(v_staff) and u.email is not null);
   -- Trình duyệt từng gắn với tài khoản quản trị: loại cả những lượt nó ghi
   -- trước lúc đăng nhập.
   v_svis := array(select distinct e.visitor from public.site_events e
@@ -97,7 +102,8 @@ begin
     select o.id, o.user_id, coalesce(o.user_id::text, lower(o.buyer_email)) as who,
            o.kind, o.item_key, o.status, o.total_vnd, o.created_at
     from public.orders o
-    where o.user_id is null or not (o.user_id = any(v_staff))
+    where (o.user_id is null or not (o.user_id = any(v_staff)))
+      and not (lower(o.buyer_email) = any(v_mail))
   ),
   first_visit as (
     select distinct on (ev.visitor) ev.visitor, ev.source
@@ -179,10 +185,12 @@ begin
                             and o2.created_at >= p_from and o2.created_at < p_to)),
         'bookings', (select count(*) from public.bookings b
                      where b.created_at >= p_from and b.created_at < p_to
-                       and (b.user_id is null or not (b.user_id = any(v_staff)))),
+                       and (b.user_id is null or not (b.user_id = any(v_staff)))
+                       and not (lower(b.email) = any(v_mail))),
         'bookings_done', (select count(*) from public.bookings b
                           where b.created_at >= p_from and b.created_at < p_to and b.status <> 'new'
-                            and (b.user_id is null or not (b.user_id = any(v_staff))))
+                            and (b.user_id is null or not (b.user_id = any(v_staff)))
+                            and not (lower(b.email) = any(v_mail)))
       ) from ord o where o.created_at >= p_from and o.created_at < p_to),
 
     'loyalty', jsonb_build_object(
@@ -248,14 +256,20 @@ begin
       'pending_oldest_h', (select floor(extract(epoch from now() - min(o.created_at)) / 3600)
           from ord o where o.status = 'pending'),
       'book_new', (select count(*) from public.bookings b
-          where b.status = 'new' and (b.user_id is null or not (b.user_id = any(v_staff)))),
+          where b.status = 'new' and (b.user_id is null or not (b.user_id = any(v_staff)))
+            and not (lower(b.email) = any(v_mail))),
       'book_late', (select count(*) from public.bookings b
           where b.status = 'new' and b.created_at < now() - interval '24 hours'
-            and (b.user_id is null or not (b.user_id = any(v_staff)))),
+            and (b.user_id is null or not (b.user_id = any(v_staff)))
+            and not (lower(b.email) = any(v_mail))),
       'courses_on', (select count(*) from public.courses c where c.is_active),
       'courses_img', (select count(*) from public.courses c where c.is_active and c.image_url <> ''),
       'courses_lessons', (select count(*) from public.courses c where c.is_active
           and exists (select 1 from public.course_lessons l where l.course_key = c.key)),
+      'courses_sched', (select count(*) from public.courses c where c.is_active
+          and exists (select 1 from public.class_schedule s
+                      where s.course_key = c.key and s.is_active
+                        and (s.end_date is null or s.end_date >= current_date))),
       'packs_on', (select count(*) from public.memberships m where m.is_active),
       'packs_sched', (select count(*) from public.memberships m where m.is_active
           and exists (select 1 from public.class_schedule s
