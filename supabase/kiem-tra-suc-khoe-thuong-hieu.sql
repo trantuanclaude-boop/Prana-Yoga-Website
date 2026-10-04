@@ -25,11 +25,13 @@ declare
   v_err     text;
   r         jsonb;
   r2        jsonb;
+  v_course  text;
   a timestamptz := '2030-01-01 00:00+07';
   b timestamptz := '2030-02-01 00:00+07';
 begin
   select s.user_id into v_founder from public.staff s order by (s.role = 'founder') desc limit 1;
   if v_founder is null then raise exception 'SAI: không có ai trong public.staff để thử.'; end if;
+  select c.key into v_course from public.courses c order by c.is_active desc, c.sort_order, c.key limit 1;
 
   -- Khách thường, quay đầu cùng giao dịch
   insert into auth.users (id, aud, role, email)
@@ -69,25 +71,25 @@ begin
   insert into public.site_events (visitor, user_id, kind, item_key, source, created_at) values
     -- Khách có tài khoản: tới từ Google, ghé hai ngày, xem khoá, vào thanh toán
     ('vthukhachtk01', null,   'visit',    '',            'search:google', '2030-01-06 08:00+07'),
-    ('vthukhachtk01', null,   'course',   'hoi-tho',     '',              '2030-01-06 08:01+07'),
-    ('vthukhachtk01', null,   'checkout', 'hoi-tho',     '',              '2030-01-06 08:02+07'),
+    ('vthukhachtk01', null,   'course',   v_course,     '',              '2030-01-06 08:01+07'),
+    ('vthukhachtk01', null,   'checkout', v_course,     '',              '2030-01-06 08:02+07'),
     ('vthukhachtk01', v_user, 'visit',    '',            'direct',        '2030-01-09 08:00+07'),
     -- Trình duyệt của quản trị: phải bị loại
     ('vthuquantri01', null,      'visit',  '',        'direct', '2030-01-07 08:00+07'),
-    ('vthuquantri01', v_founder, 'course', 'hoi-tho', '',       '2030-01-07 08:05+07');
+    ('vthuquantri01', v_founder, 'course', v_course, '',       '2030-01-07 08:05+07');
 
   insert into public.orders (
     code, user_id, kind, item_key, item_name, plan,
     base_vnd, discount_vnd, vat_vnd, total_vnd,
     method, status, buyer_name, buyer_phone, buyer_email, created_at
   ) values
-    ('PY-THUSK01', v_user, 'course', 'hoi-tho', 'Khoá thử', 'full',
+    ('PY-THUSK01', v_user, 'course', v_course, 'Khoá thử', 'full',
      1000000, 0, 80000, 1080000, 'bank', 'paid', 'Người thử', '0900000000', 'thu@vidu.test', '2030-01-06 08:10+07'),
-    ('PY-THUSK02', v_founder, 'course', 'hoi-tho', 'Đơn thử của quản trị', 'full',
+    ('PY-THUSK02', v_founder, 'course', v_course, 'Đơn thử của quản trị', 'full',
      1000000, 0, 80000, 1080000, 'bank', 'paid', 'Quản trị', '0900000000', 'qt@vidu.test', '2030-01-07 08:10+07');
 
   insert into public.course_reviews (user_id, course_key, rating, body, author_name, created_at)
-  values (v_user, 'hoi-tho', 5, 'Thử', 'Người thử', '2030-01-10 08:00+07');
+  values (v_user, v_course, 5, 'Thử', 'Người thử', '2030-01-10 08:00+07');
 
   -- 3. Khách thường bị chặn --------------------------------------------------
   set local role authenticated;
