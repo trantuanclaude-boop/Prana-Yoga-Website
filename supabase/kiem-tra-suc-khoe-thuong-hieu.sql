@@ -22,7 +22,6 @@ do $do$
 declare
   v_user    uuid;
   v_founder uuid;
-  v_order   uuid;
   v_err     text;
   r         jsonb;
   r2        jsonb;
@@ -85,8 +84,7 @@ begin
     ('PY-THUSK01', v_user, 'course', 'hoi-tho', 'Khoá thử', 'full',
      1000000, 0, 80000, 1080000, 'bank', 'paid', 'Người thử', '0900000000', 'thu@vidu.test', '2030-01-06 08:10+07'),
     ('PY-THUSK02', v_founder, 'course', 'hoi-tho', 'Đơn thử của quản trị', 'full',
-     1000000, 0, 80000, 1080000, 'bank', 'paid', 'Quản trị', '0900000000', 'qt@vidu.test', '2030-01-07 08:10+07')
-  returning id into v_order;
+     1000000, 0, 80000, 1080000, 'bank', 'paid', 'Quản trị', '0900000000', 'qt@vidu.test', '2030-01-07 08:10+07');
 
   insert into public.course_reviews (user_id, course_key, rating, body, author_name, created_at)
   values (v_user, 'hoi-tho', 5, 'Thử', 'Người thử', '2030-01-10 08:00+07');
