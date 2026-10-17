@@ -245,8 +245,11 @@ grant execute on function public.admin_study_set(uuid, date, integer, integer, t
 
 -- 6. Tóm tắt chuỗi của một người ---------------------------------------------------
 -- Đi xuôi 401 ngày gần nhất, đúng luật ở đầu tệp.
-create or replace function private.study_summary(p_user uuid)
-returns table(last_day date, today_min integer, cur_streak integer, best_streak integer,
+drop function if exists public.admin_study_overview(text, integer);
+drop function if exists private.study_summary(uuid);
+create function private.study_summary(p_user uuid)
+returns table(last_day date, today_min integer, today_ok boolean, today_studio integer,
+              cur_streak integer, best_streak integer,
               days_30 integer, min_30 integer, days_year integer)
 language plpgsql
 stable
@@ -262,10 +265,12 @@ begin
   select st.goal_minutes, st.rest_days into v_goal, v_rest from public.streak_settings st where st.id = 1;
   v_goal := coalesce(v_goal, 10);
   v_rest := coalesce(v_rest, '{}');
-  last_day := null; today_min := 0; best_streak := 0; days_30 := 0; min_30 := 0; days_year := 0;
+  last_day := null; today_min := 0; today_ok := false; today_studio := 0;
+  best_streak := 0; days_30 := 0; min_30 := 0; days_year := 0;
   for r in
     select g.d::date as day,
            s.user_id is not null as has,
+           coalesce(s.studio_min, 0)::integer as studio,
            coalesce(s.online_sec / 60 + s.self_min + s.studio_min, 0) as mins,
            coalesce(cardinality(s.lessons) > 0 or s.studio_min > 0
                     or s.online_sec / 60 + s.self_min + s.studio_min >= v_goal, false) as ok
@@ -285,7 +290,7 @@ begin
       last_day := r.day;
       if r.day > v_today - 30 then min_30 := min_30 + r.mins; end if;
     end if;
-    if r.day = v_today then today_min := r.mins; end if;
+    if r.day = v_today then today_min := r.mins; today_ok := r.ok; today_studio := r.studio; end if;
   end loop;
   cur_streak := v_run;
   return next;
@@ -297,11 +302,11 @@ revoke all on function private.study_summary(uuid) from public, anon, authentica
 -- Ô tìm trống: chỉ những người có tập trong 400 ngày qua. Có chữ: mọi tài
 -- khoản khớp email / tên / số điện thoại, để quầy tìm được người chưa tập
 -- lần nào mà điểm danh buổi đầu.
-create or replace function public.admin_study_overview(p_q text default '', p_limit integer default 200)
+create function public.admin_study_overview(p_q text default '', p_limit integer default 200)
 returns table(
   user_id uuid, email text, full_name text, phone text, is_staff boolean,
-  last_day date, today_min integer, cur_streak integer, best_streak integer,
-  days_30 integer, min_30 integer, days_year integer
+  last_day date, today_min integer, today_ok boolean, today_studio integer,
+  cur_streak integer, best_streak integer, days_30 integer, min_30 integer, days_year integer
 )
 language sql
 stable
@@ -327,7 +332,8 @@ as $function$
     limit 500
   )
   select w.id, w.email, w.full_name, w.phone, w.is_staff,
-         x.last_day, x.today_min, x.cur_streak, x.best_streak, x.days_30, x.min_30, x.days_year
+         x.last_day, x.today_min, x.today_ok, x.today_studio,
+         x.cur_streak, x.best_streak, x.days_30, x.min_30, x.days_year
   from who w
   cross join lateral private.study_summary(w.id) x
   order by x.cur_streak desc, x.last_day desc nulls last, w.created_at desc

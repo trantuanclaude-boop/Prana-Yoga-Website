@@ -158,6 +158,7 @@ begin
     r.cur_streak, r.best_streak, r.days_30, r.min_30, r.today_min;
   if r.cur_streak <> 2 or r.best_streak <> 2 then raise exception 'SAI 8a: chuỗi % / %, mong 2 / 2.', r.cur_streak, r.best_streak; end if;
   if r.today_min <> 34 then raise exception 'SAI 8b: hôm nay % phút, mong 34 (4 online + 30 tự tập).', r.today_min; end if;
+  if not r.today_ok or r.today_studio <> 0 then raise exception 'SAI 8d: hôm nay đã đủ = %, studio = %; mong true / 0.', r.today_ok, r.today_studio; end if;
   select count(*) into v_n from public.admin_study_overview('', 500) o where o.user_id = v_b;
   if v_n <> 0 then raise exception 'SAI 8c: ô tìm trống mà hiện cả người chưa tập.'; end if;
 
